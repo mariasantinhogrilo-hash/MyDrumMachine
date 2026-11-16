@@ -1,0 +1,1843 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TR-X808 // Analog Style Drum Synthesizer</title>
+  <style>
+    /* ==========================================================================
+       DESIGN TOKENS & HARDWARE PALETTE (TR-808 / ELEKTRON INSPIRED)
+       ========================================================================== */
+    :root {
+      --bg-chassis: #131519;
+      --bg-panel: #1b1e24;
+      --bg-module: #22262e;
+      --bg-recessed: #0e1013;
+      --border-subtle: #2e3440;
+      --border-highlight: #3e4656;
+
+      --text-primary: #e8ecf2;
+      --text-secondary: #8c96a8;
+      --text-muted: #565f70;
+
+      --led-orange: #ff6b1a;
+      --led-orange-glow: rgba(255, 107, 26, 0.55);
+      --led-amber: #ffb800;
+      --led-amber-glow: rgba(255, 184, 0, 0.5);
+      --led-cyan: #00e5ff;
+      --led-cyan-glow: rgba(0, 229, 255, 0.5);
+      --led-red: #ff2e4c;
+      --led-red-glow: rgba(255, 46, 76, 0.55);
+      --led-green: #10e878;
+      --led-green-glow: rgba(16, 232, 120, 0.45);
+
+      --step-off: #272c36;
+      --step-off-alt: #20242d;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      min-height: 100vh;
+      background: radial-gradient(circle at 50% 0%, #1f242d 0%, #0b0d10 100%);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ==========================================================================
+       MAIN CHASSIS & HEADER
+       ========================================================================== */
+    .chassis {
+      width: 100%;
+      max-width: 1220px;
+      background: linear-gradient(180deg, #1e2229 0%, #14171c 100%);
+      border: 1px solid var(--border-highlight);
+      border-top: 2px solid #4a5366;
+      border-radius: var(--radius-lg);
+      box-shadow:
+        0 28px 60px rgba(0, 0, 0, 0.75),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      padding: 20px;
+      position: relative;
+    }
+
+    /* Decorative corner screws */
+    .screw {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #555e70, #181b20);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+    .screw::after {
+      content: "";
+      position: absolute;
+      top: 4px;
+      left: 2px;
+      width: 6px;
+      height: 1.5px;
+      background: #0d0f12;
+      transform: rotate(35deg);
+    }
+    .screw.tl { top: 10px; left: 10px; }
+    .screw.tr { top: 10px; right: 10px; }
+    .screw.bl { bottom: 10px; left: 10px; }
+    .screw.br { bottom: 10px; right: 10px; }
+
+    /* Top Branding & Global Bar */
+    .top-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-badge {
+      background: linear-gradient(135deg, var(--led-orange), #d94800);
+      color: #fff;
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 1.5px;
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 0 14px var(--led-orange-glow);
+    }
+
+    .brand-title {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--text-primary);
+    }
+
+    .brand-sub {
+      font-size: 11px;
+      color: var(--text-secondary);
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+
+    /* Status / Toast Display */
+    .lcd-display {
+      background: var(--bg-recessed);
+      border: 1px solid #2b323f;
+      border-radius: var(--radius-sm);
+      padding: 8px 14px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--led-cyan);
+      text-shadow: 0 0 8px var(--led-cyan-glow);
+      min-width: 240px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.85);
+    }
+
+    .lcd-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background 0.08s, box-shadow 0.08s;
+    }
+    .lcd-dot.active {
+      background: var(--led-green);
+      box-shadow: 0 0 10px var(--led-green-glow);
+    }
+
+    /* ==========================================================================
+       CONTROL DECK (TRANSPORT, TEMPO, MASTER FX, PRESETS)
+       ========================================================================== */
+    .control-deck {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .module {
+      background: var(--bg-module);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .module-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+
+    .btn-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Hardware Buttons */
+    button {
+      font-family: var(--font-sans);
+      cursor: pointer;
+      border: none;
+      outline: none;
+      transition: transform 0.06s ease, box-shadow 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .hw-btn {
+      background: linear-gradient(180deg, #323844 0%, #242932 100%);
+      border: 1px solid #414959;
+      border-bottom-width: 2px;
+      color: var(--text-primary);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .hw-btn:hover {
+      background: linear-gradient(180deg, #3a4150 0%, #2a2f3a 100%);
+      border-color: #545e73;
+    }
+
+    .hw-btn .led-indicator {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #14171c;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.8);
+    }
+
+    /* Play Button Active */
+    .hw-btn.play-btn.playing {
+      border-color: var(--led-green);
+      color: #fff;
+      box-shadow: 0 0 14px var(--led-green-glow);
+    }
+    .hw-btn.play-btn.playing .led-indicator {
+      background: var(--led-green);
+      box-shadow: 0 0 8px var(--led-green);
+    }
+
+    /* Slot A / B Active */
+    .hw-btn.slot-btn.active {
+      border-color: var(--led-cyan);
+      color: var(--led-cyan);
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.25);
+    }
+    .hw-btn.slot-btn.active .led-indicator {
+      background: var(--led-cyan);
+      box-shadow: 0 0 8px var(--led-cyan);
+    }
+
+    .hw-btn.danger:hover {
+      border-color: var(--led-red);
+      color: #ff8a9b;
+    }
+
+    /* Sliders & Readouts */
+    .param-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .param-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .param-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      min-width: 64px;
+    }
+
+    .param-value {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--led-amber);
+      background: var(--bg-recessed);
+      border: 1px solid #2c3340;
+      padding: 2px 7px;
+      border-radius: 3px;
+      min-width: 56px;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      flex: 1;
+      height: 6px;
+      background: var(--bg-recessed);
+      border: 1px solid #2f3644;
+      border-radius: 999px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 18px;
+      border-radius: 3px;
+      background: linear-gradient(180deg, #d8dee9 0%, #8c96a8 100%);
+      border: 1px solid #1b1e24;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+      cursor: pointer;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 18px;
+      border-radius: 3px;
+      background: linear-gradient(180deg, #d8dee9 0%, #8c96a8 100%);
+      border: 1px solid #1b1e24;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+      cursor: pointer;
+    }
+
+    /* Preset Selector */
+    select.hw-select {
+      background: var(--bg-recessed);
+      color: var(--text-primary);
+      border: 1px solid #3c4454;
+      border-radius: var(--radius-sm);
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+      flex: 1;
+    }
+    select.hw-select:focus {
+      border-color: var(--led-orange);
+    }
+
+    /* ==========================================================================
+       SEQUENCER MATRIX (8 TRACKS x 16 STEPS)
+       ========================================================================== */
+    .sequencer-wrapper {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      overflow-x: auto;
+    }
+
+    .sequencer-grid {
+      min-width: 880px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Step Numbers & Playhead Header */
+    .step-header-row {
+      display: grid;
+      grid-template-columns: 235px 1fr;
+      gap: 14px;
+      align-items: center;
+      padding-bottom: 4px;
+    }
+
+    .track-col-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      padding: 0 4px;
+    }
+
+    .step-indicators {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      gap: 6px;
+    }
+
+    .step-num {
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      padding: 3px 0;
+      border-radius: 3px;
+      background: var(--bg-recessed);
+      border: 1px solid transparent;
+      transition: all 0.06s ease;
+    }
+
+    .step-num.beat-start {
+      color: var(--text-secondary);
+      border-bottom: 2px solid #3c4454;
+    }
+
+    .step-num.current {
+      color: #fff;
+      background: rgba(0, 229, 255, 0.18);
+      border-color: var(--led-cyan);
+      box-shadow: 0 0 10px var(--led-cyan-glow);
+    }
+
+    /* Track Row */
+    .track-row {
+      display: grid;
+      grid-template-columns: 235px 1fr;
+      gap: 14px;
+      align-items: center;
+      background: rgba(14, 16, 19, 0.45);
+      border: 1px solid rgba(46, 52, 64, 0.6);
+      border-radius: var(--radius-sm);
+      padding: 6px 8px;
+      transition: border-color 0.15s;
+    }
+
+    .track-row:hover {
+      border-color: #3f4859;
+    }
+
+    .track-row.muted {
+      opacity: 0.5;
+    }
+
+    /* Track Controls (Left side) */
+    .track-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .trigger-pad {
+      width: 68px;
+      text-align: left;
+      padding: 6px 8px;
+      border-radius: var(--radius-sm);
+      background: #252a34;
+      border: 1px solid #38404f;
+      color: var(--text-primary);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .trigger-pad:hover {
+      background: #2f3542;
+    }
+
+    .trigger-pad .track-color-bar {
+      width: 4px;
+      height: 14px;
+      border-radius: 2px;
+      background: var(--track-color, var(--led-orange));
+      box-shadow: 0 0 6px var(--track-color, var(--led-orange));
+    }
+
+    .mini-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 800;
+      background: #242932;
+      border: 1px solid #383f4d;
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .mini-btn.mute.active {
+      background: rgba(255, 46, 76, 0.22);
+      border-color: var(--led-red);
+      color: var(--led-red);
+      box-shadow: 0 0 8px var(--led-red-glow);
+    }
+
+    .mini-btn.solo.active {
+      background: rgba(255, 184, 0, 0.22);
+      border-color: var(--led-amber);
+      color: var(--led-amber);
+      box-shadow: 0 0 8px var(--led-amber-glow);
+    }
+
+    .track-vol {
+      width: 64px !important;
+      flex: none !important;
+    }
+
+    /* 16 Step Pads Grid */
+    .steps-container {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      gap: 6px;
+    }
+
+    .step-pad {
+      height: 36px;
+      border-radius: var(--radius-sm);
+      background: var(--step-off);
+      border: 1px solid #353c4a;
+      border-bottom: 3px solid #181b22;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 5px;
+      transition: transform 0.05s ease, background 0.08s ease, box-shadow 0.08s ease;
+    }
+
+    /* Group shading every 4 steps (0-3 bright, 4-7 alt, 8-11 bright, 12-15 alt) */
+    .step-pad.group-alt {
+      background: var(--step-off-alt);
+    }
+
+    .step-pad:hover {
+      border-color: #546075;
+    }
+
+    /* Small horizontal LED slit on each hardware pad */
+    .step-pad::before {
+      content: "";
+      width: 60%;
+      height: 4px;
+      border-radius: 2px;
+      background: #14171d;
+      transition: background 0.08s, box-shadow 0.08s;
+    }
+
+    /* Active Step (Normal Velocity) */
+    .step-pad.active {
+      background: linear-gradient(180deg, #333a48 0%, #262b36 100%);
+      border-color: var(--track-color, var(--led-orange));
+    }
+    .step-pad.active::before {
+      background: var(--track-color, var(--led-orange));
+      box-shadow: 0 0 10px var(--track-color, var(--led-orange));
+    }
+
+    /* Accent Step (High Velocity - Double click or Shift+Click) */
+    .step-pad.accent {
+      background: linear-gradient(180deg, #433829 0%, #2d261e 100%);
+      border-color: #ffffff;
+    }
+    .step-pad.accent::before {
+      width: 78%;
+      height: 5px;
+      background: #ffffff;
+      box-shadow: 0 0 12px #ffffff, 0 0 18px var(--track-color, var(--led-orange));
+    }
+
+    /* Playhead Highlight */
+    .step-pad.playing {
+      transform: scale(1.04);
+      border-color: var(--led-cyan);
+      box-shadow: inset 0 0 10px rgba(0, 229, 255, 0.35);
+    }
+
+    .step-pad.active.playing {
+      box-shadow: 0 0 16px var(--track-color, var(--led-orange)), inset 0 0 8px rgba(255, 255, 255, 0.4);
+    }
+
+    /* ==========================================================================
+       FOOTER & JSON MODAL / UTILITY BAR
+       ========================================================================== */
+    .footer-bar {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .legend {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-swatch {
+      width: 12px;
+      height: 6px;
+      border-radius: 2px;
+    }
+
+    /* Pattern Export/Import Drawer */
+    .json-drawer {
+      display: none;
+      margin-top: 12px;
+      background: var(--bg-recessed);
+      border: 1px solid var(--border-highlight);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      gap: 10px;
+      flex-direction: column;
+    }
+    .json-drawer.open {
+      display: flex;
+    }
+    .json-drawer textarea {
+      width: 100%;
+      height: 76px;
+      background: #14171c;
+      color: var(--led-cyan);
+      border: 1px solid #323947;
+      border-radius: var(--radius-sm);
+      padding: 8px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      resize: vertical;
+      outline: none;
+    }
+
+    @media (max-width: 768px) {
+      body { padding: 8px; }
+      .chassis { padding: 14px; }
+      .lcd-display { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <main class="chassis">
+    <!-- Decorative Hardware Screws -->
+    <div class="screw tl"></div>
+    <div class="screw tr"></div>
+    <div class="screw bl"></div>
+    <div class="screw br"></div>
+
+    <!-- Top Header & LCD Display -->
+    <header class="top-bar">
+      <div class="brand">
+        <span class="brand-badge">TR-X808</span>
+        <div>
+          <h1 class="brand-title">Rhythm Composer</h1>
+          <div class="brand-sub">Real-Time Web Audio Drum Synthesizer // 8-Voice 16-Step</div>
+        </div>
+      </div>
+
+      <div class="lcd-display" id="lcdDisplay">
+        <span id="lcdText">BEREIT // LEERTASTE = START</span>
+        <span class="lcd-dot" id="lcdBeatDot"></span>
+      </div>
+    </header>
+
+    <!-- Main Hardware Control Deck -->
+    <section class="control-deck">
+
+      <!-- Module 1: Transport & Pattern Slots -->
+      <div class="module">
+        <div class="module-header">
+          <span>Transport & Pattern Memory</span>
+          <span id="stepCounterReadout">STEP 01/16</span>
+        </div>
+        <div class="btn-row">
+          <button class="hw-btn play-btn" id="playStopBtn" title="Start / Stop (Leertaste)">
+            <span class="led-indicator"></span>
+            <span id="playStopLabel">PLAY</span>
+          </button>
+          <button class="hw-btn slot-btn active" id="slotABtn" title="Pattern Slot A">
+            <span class="led-indicator"></span>
+            <span>PTN A</span>
+          </button>
+          <button class="hw-btn slot-btn" id="slotBBtn" title="Pattern Slot B">
+            <span class="led-indicator"></span>
+            <span>PTN B</span>
+          </button>
+          <button class="hw-btn danger" id="clearBtn" title="Aktuelles Pattern löschen">
+            CLEAR
+          </button>
+        </div>
+      </div>
+
+      <!-- Module 2: Clock, Tempo & Groove -->
+      <div class="module">
+        <div class="module-header">
+          <span>Master Clock & Groove</span>
+          <span>SYNC: INT</span>
+        </div>
+        <div class="param-group">
+          <div class="param-row">
+            <span class="param-label">TEMPO</span>
+            <input type="range" id="bpmSlider" min="60" max="180" value="124" />
+            <span class="param-value" id="bpmValue">124 BPM</span>
+          </div>
+          <div class="param-row">
+            <span class="param-label">SWING</span>
+            <input type="range" id="swingSlider" min="0" max="50" value="12" />
+            <span class="param-value" id="swingValue">12 %</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Module 3: Master Filter, Drive & Volume -->
+      <div class="module">
+        <div class="module-header">
+          <span>Master Analog Bus</span>
+          <span>FILTER / DRIVE</span>
+        </div>
+        <div class="param-group">
+          <div class="param-row">
+            <span class="param-label">CUTOFF</span>
+            <input type="range" id="filterSlider" min="300" max="18000" value="18000" />
+            <span class="param-value" id="filterValue">18.0k</span>
+          </div>
+          <div class="param-row">
+            <span class="param-label">DRIVE / VOL</span>
+            <input type="range" id="driveSlider" min="0" max="100" value="15" title="Analog Saturation Drive" />
+            <input type="range" id="masterVolSlider" min="0" max="100" value="85" title="Master Volume" />
+            <span class="param-value" id="masterVolValue">85 %</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Module 4: Genre Presets & Generator -->
+      <div class="module">
+        <div class="module-header">
+          <span>Presets & Pattern Tools</span>
+          <span>FACTORY ROM</span>
+        </div>
+        <div class="btn-row">
+          <select class="hw-select" id="presetSelect" aria-label="Genre Preset auswählen">
+            <option value="house">01: Classic 909 House</option>
+            <option value="techno">02: Berlin Dark Techno</option>
+            <option value="boombap">03: 90s Hip-Hop / Boom Bap</option>
+            <option value="dnb">04: Liquid Breakbeat / DnB</option>
+            <option value="trap">05: Modern 808 Trap</option>
+          </select>
+          <button class="hw-btn" id="randomBtn" title="Zufälligen Beat generieren">
+            RANDOM
+          </button>
+          <button class="hw-btn" id="toggleJsonBtn" title="Pattern als JSON exportieren oder importieren">
+            JSON
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 16-Step Sequencer Grid -->
+    <section class="sequencer-wrapper">
+      <div class="sequencer-grid" id="sequencerGrid">
+        <!-- Step Number Header -->
+        <div class="step-header-row">
+          <div class="track-col-title">
+            <span>VOICE / PAD</span>
+            <span>M / S / VOL</span>
+          </div>
+          <div class="step-indicators" id="stepIndicators"></div>
+        </div>
+        <!-- Track rows injected via JS -->
+      </div>
+    </section>
+
+    <!-- JSON Export / Import Drawer -->
+    <section class="json-drawer" id="jsonDrawer">
+      <div class="module-header">
+        <span>Pattern JSON Export / Import</span>
+        <div class="btn-row">
+          <button class="hw-btn" id="copyJsonBtn">KOPIEREN</button>
+          <button class="hw-btn" id="loadJsonBtn">IMPORTIEREN</button>
+        </div>
+      </div>
+      <textarea id="jsonTextarea" spellcheck="false" placeholder="Pattern JSON hier einfügen..."></textarea>
+    </section>
+
+    <!-- Footer Legend & Shortcuts -->
+    <footer class="footer-bar">
+      <div class="legend">
+        <div class="legend-item">
+          <span class="legend-swatch" style="background: var(--led-orange); box-shadow: 0 0 6px var(--led-orange);"></span>
+          <span>Klick = Normal Step</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch" style="background: #ffffff; box-shadow: 0 0 6px #ffffff;"></span>
+          <span>2. Klick / Rechtsklick = Accent (Laut)</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch" style="background: var(--led-cyan); box-shadow: 0 0 6px var(--led-cyan);"></span>
+          <span>Spurname klicken = Sound vorhören</span>
+        </div>
+      </div>
+      <div>
+        <span>Shortcuts: <strong>[Leertaste]</strong> Play/Stop &bull; <strong>[C]</strong> Clear</span>
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    /**
+     * ============================================================================
+     * TR-X808 ANALOG-STYLE DRUM SYNTHESIZER & 16-STEP SEQUENCER
+     * Zero external dependencies. Pure Web Audio API synthesis + Lookahead Clock.
+     * ============================================================================
+     */
+
+    (() => {
+      "use strict";
+
+      /* --------------------------------------------------------------------------
+         1. TRACK DEFINITIONS & CONFIGURATION
+         -------------------------------------------------------------------------- */
+      const TRACKS = [
+        { id: "kick",    name: "KICK",     color: "#ff6b1a", defaultVol: 0.95 },
+        { id: "snare",   name: "SNARE",    color: "#ffb800", defaultVol: 0.85 },
+        { id: "clap",    name: "CLAP",     color: "#ff2e4c", defaultVol: 0.80 },
+        { id: "ch",      name: "CL HAT",   color: "#00e5ff", defaultVol: 0.72 },
+        { id: "oh",      name: "OP HAT",   color: "#10e878", defaultVol: 0.68 },
+        { id: "lowtom",  name: "LOW TOM",  color: "#b366ff", defaultVol: 0.80 },
+        { id: "hitom",   name: "HI TOM",   color: "#ff66c4", defaultVol: 0.76 },
+        { id: "cowbell", name: "COWBELL",  color: "#ffe600", defaultVol: 0.65 }
+      ];
+
+      const NUM_STEPS = 16;
+
+      /* --------------------------------------------------------------------------
+         2. BUILT-IN GENRE PRESETS
+         Values per step: 0 = Off, 1 = Normal hit, 2 = Accented hit
+         -------------------------------------------------------------------------- */
+      const PRESETS = {
+        house: {
+          name: "Classic 909 House",
+          bpm: 124,
+          swing: 16,
+          steps: {
+            kick:    [2,0,0,0, 2,0,0,0, 2,0,0,0, 2,0,0,0],
+            snare:   [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+            clap:    [0,0,0,0, 2,0,0,0, 0,0,0,0, 2,0,0,1],
+            ch:      [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,1],
+            oh:      [0,0,2,0, 0,0,2,0, 0,0,2,0, 0,0,2,0],
+            lowtom:  [0,0,0,0, 0,0,0,1, 0,0,1,0, 0,0,0,0],
+            hitom:   [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,1,0,0],
+            cowbell: [1,0,0,1, 0,0,1,0, 0,1,0,0, 1,0,0,0]
+          }
+        },
+        techno: {
+          name: "Berlin Dark Techno",
+          bpm: 134,
+          swing: 6,
+          steps: {
+            kick:    [2,0,0,0, 2,0,0,0, 2,0,0,0, 2,0,0,1],
+            snare:   [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,1,0],
+            clap:    [0,0,0,0, 2,0,0,0, 0,0,0,0, 2,0,0,0],
+            ch:      [1,1,2,1, 1,1,2,1, 1,1,2,1, 1,1,2,1],
+            oh:      [0,0,2,0, 0,0,2,0, 0,0,2,0, 0,0,2,0],
+            lowtom:  [0,0,1,0, 0,1,0,0, 0,0,1,0, 0,0,0,2],
+            hitom:   [0,0,0,1, 0,0,0,0, 0,1,0,0, 0,0,1,0],
+            cowbell: [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0]
+          }
+        },
+        boombap: {
+          name: "90s Hip-Hop / Boom Bap",
+          bpm: 92,
+          swing: 34,
+          steps: {
+            kick:    [2,0,0,1, 0,0,0,1, 0,1,2,0, 0,0,0,0],
+            snare:   [0,0,0,0, 2,0,0,0, 0,0,0,0, 2,0,0,1],
+            clap:    [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+            ch:      [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,1],
+            oh:      [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,2,0],
+            lowtom:  [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,1,0],
+            hitom:   [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,1,0,0],
+            cowbell: [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0]
+          }
+        },
+        dnb: {
+          name: "Liquid Breakbeat / DnB",
+          bpm: 172,
+          swing: 0,
+          steps: {
+            kick:    [2,0,0,0, 0,0,0,0, 0,0,2,0, 0,0,0,0],
+            snare:   [0,0,0,0, 2,0,0,1, 0,1,0,0, 2,0,0,0],
+            clap:    [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+            ch:      [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0],
+            oh:      [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,2,0],
+            lowtom:  [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,1],
+            hitom:   [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,1,0],
+            cowbell: [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0]
+          }
+        },
+        trap: {
+          name: "Modern 808 Trap",
+          bpm: 140,
+          swing: 8,
+          steps: {
+            kick:    [2,0,0,0, 0,0,1,0, 0,0,2,0, 0,1,0,0],
+            snare:   [0,0,0,0, 0,0,0,0, 2,0,0,0, 0,0,0,0],
+            clap:    [0,0,0,0, 0,0,0,0, 2,0,0,0, 0,0,0,1],
+            ch:      [1,1,1,1, 1,1,2,1, 1,1,1,1, 2,1,1,2],
+            oh:      [0,0,2,0, 0,0,0,0, 0,0,2,0, 0,0,0,0],
+            lowtom:  [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,1,0],
+            hitom:   [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,1,0,0],
+            cowbell: [2,0,0,1, 0,0,2,0, 0,0,1,0, 2,0,0,0]
+          }
+        }
+      };
+
+      /* --------------------------------------------------------------------------
+         3. APPLICATION STATE
+         -------------------------------------------------------------------------- */
+      function createEmptyPattern() {
+        const pattern = {};
+        TRACKS.forEach(t => {
+          pattern[t.id] = new Array(NUM_STEPS).fill(0);
+        });
+        return pattern;
+      }
+
+      function clonePattern(src) {
+        const copy = {};
+        TRACKS.forEach(t => {
+          copy[t.id] = src[t.id] ? [...src[t.id]] : new Array(NUM_STEPS).fill(0);
+        });
+        return copy;
+      }
+
+      const state = {
+        isPlaying: false,
+        currentStep: 0,
+        bpm: 124,
+        swing: 12,          // 0 - 50 (%)
+        masterCutoff: 18000,
+        masterDrive: 15,    // 0 - 100
+        masterVolume: 0.85,
+        activeSlot: "A",
+        patterns: {
+          A: clonePattern(PRESETS.house.steps),
+          B: clonePattern(PRESETS.techno.steps)
+        },
+        trackSettings: {}
+      };
+
+      TRACKS.forEach(t => {
+        state.trackSettings[t.id] = {
+          volume: t.defaultVol,
+          muted: false,
+          solo: false
+        };
+      });
+
+      /* --------------------------------------------------------------------------
+         4. WEB AUDIO API DRUM SYNTHESIZER ENGINE
+         -------------------------------------------------------------------------- */
+      let audioCtx = null;
+      let masterGain = null;
+      let masterFilter = null;
+      let masterShaper = null;
+      let compressor = null;
+      let noiseBuffer = null;
+
+      /**
+       * Initializes or resumes the Web Audio Context and Master Effects Bus
+       */
+      function initAudio() {
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContextClass();
+
+          // Master Filter (Lowpass)
+          masterFilter = audioCtx.createBiquadFilter();
+          masterFilter.type = "lowpass";
+          masterFilter.frequency.value = state.masterCutoff;
+          masterFilter.Q.value = 0.85;
+
+          // Analog Saturation / WaveShaper
+          masterShaper = audioCtx.createWaveShaper();
+          masterShaper.curve = makeDistortionCurve(state.masterDrive);
+          masterShaper.oversample = "2x";
+
+          // Dynamics Compressor for punchy drum bus glue
+          compressor = audioCtx.createDynamicsCompressor();
+          compressor.threshold.value = -12;
+          compressor.knee.value = 12;
+          compressor.ratio.value = 4;
+          compressor.attack.value = 0.003;
+          compressor.release.value = 0.15;
+
+          // Master Output Gain
+          masterGain = audioCtx.createGain();
+          masterGain.gain.value = state.masterVolume;
+
+          // Routing: Voices -> Filter -> Shaper -> Compressor -> MasterGain -> Destination
+          masterFilter.connect(masterShaper);
+          masterShaper.connect(compressor);
+          compressor.connect(masterGain);
+          masterGain.connect(audioCtx.destination);
+
+          // Pre-generate 2 seconds of white noise buffer for Snare, Hats, Clap
+          noiseBuffer = createNoiseBuffer(2.0);
+        }
+
+        if (audioCtx.state === "suspended") {
+          audioCtx.resume();
+        }
+      }
+
+      function createNoiseBuffer(durationSec) {
+        const bufferSize = Math.floor(audioCtx.sampleRate * durationSec);
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        return buffer;
+      }
+
+      function makeDistortionCurve(amount) {
+        const k = amount * 1.4;
+        const nSamples = 44100;
+        const curve = new Float32Array(nSamples);
+        const deg = Math.PI / 180;
+        if (k <= 0) {
+          for (let i = 0; i < nSamples; i++) {
+            curve[i] = (i * 2) / nSamples - 1;
+          }
+          return curve;
+        }
+        for (let i = 0; i < nSamples; i++) {
+          const x = (i * 2) / nSamples - 1;
+          curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
+      }
+
+      /**
+       * Checks if a track should produce audio based on Mute/Solo states
+       */
+      function isTrackAudible(trackId) {
+        const anySolo = TRACKS.some(t => state.trackSettings[t.id].solo);
+        const settings = state.trackSettings[trackId];
+        if (anySolo) {
+          return settings.solo && !settings.muted;
+        }
+        return !settings.muted;
+      }
+
+      /**
+       * Synthesizes and triggers a single drum voice at exact Web Audio timestamp `time`
+       * @param {string} trackId
+       * @param {number} time - AudioContext time
+       * @param {number} stepLevel - 1 (Normal) or 2 (Accent)
+       */
+      function triggerDrumVoice(trackId, time, stepLevel = 1) {
+        initAudio();
+        if (!isTrackAudible(trackId)) return;
+
+        const trackVol = state.trackSettings[trackId].volume;
+        const accentBoost = stepLevel === 2 ? 1.32 : 0.88;
+        const velocity = trackVol * accentBoost;
+
+        if (velocity <= 0.001) return;
+
+        switch (trackId) {
+          case "kick":
+            synthKick(time, velocity);
+            break;
+          case "snare":
+            synthSnare(time, velocity);
+            break;
+          case "clap":
+            synthClap(time, velocity);
+            break;
+          case "ch":
+            synthHiHat(time, velocity, false);
+            break;
+          case "oh":
+            synthHiHat(time, velocity, true);
+            break;
+          case "lowtom":
+            synthTom(time, velocity, 115, 58);
+            break;
+          case "hitom":
+            synthTom(time, velocity, 210, 105);
+            break;
+          case "cowbell":
+            synthCowbell(time, velocity);
+            break;
+        }
+      }
+
+      /* --- 808/909 Analog Kick Drum --- */
+      function synthKick(time, vel) {
+        const osc = audioCtx.createOscillator();
+        const clickOsc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const clickGain = audioCtx.createGain();
+
+        osc.type = "sine";
+        // Pitch envelope: sharp transient sweep from 155Hz down to 46Hz
+        osc.frequency.setValueAtTime(155, time);
+        osc.frequency.exponentialRampToValueAtTime(54, time + 0.055);
+        osc.frequency.exponentialRampToValueAtTime(42, time + 0.38);
+
+        gain.gain.setValueAtTime(vel * 1.15, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.44);
+
+        // Subtle beater click
+        clickOsc.type = "triangle";
+        clickOsc.frequency.setValueAtTime(900, time);
+        clickOsc.frequency.exponentialRampToValueAtTime(120, time + 0.015);
+        clickGain.gain.setValueAtTime(vel * 0.35, time);
+        clickGain.gain.exponentialRampToValueAtTime(0.001, time + 0.018);
+
+        osc.connect(gain);
+        gain.connect(masterFilter);
+
+        clickOsc.connect(clickGain);
+        clickGain.connect(masterFilter);
+
+        osc.start(time);
+        osc.stop(time + 0.45);
+        clickOsc.start(time);
+        clickOsc.stop(time + 0.02);
+      }
+
+      /* --- Analog Snare (Dual Triangle Body + Bandpass/Highpass Noise) --- */
+      function synthSnare(time, vel) {
+        // Tone body
+        const osc = audioCtx.createOscillator();
+        const oscGain = audioCtx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(215, time);
+        osc.frequency.exponentialRampToValueAtTime(115, time + 0.09);
+
+        oscGain.gain.setValueAtTime(vel * 0.65, time);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, time + 0.14);
+
+        osc.connect(oscGain);
+        oscGain.connect(masterFilter);
+        osc.start(time);
+        osc.stop(time + 0.15);
+
+        // Snare wires (Filtered Noise)
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = noiseBuffer;
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = "highpass";
+        filter.frequency.setValueAtTime(1100, time);
+
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(vel * 0.85, time);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
+
+        noise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(masterFilter);
+
+        noise.start(time);
+        noise.stop(time + 0.23);
+      }
+
+      /* --- 808/909 Multi-Burst Hand Clap --- */
+      function synthClap(time, vel) {
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = noiseBuffer;
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = "bandpass";
+        filter.frequency.setValueAtTime(1350, time);
+        filter.Q.value = 1.6;
+
+        const gain = audioCtx.createGain();
+        // 3 rapid micro-bursts followed by reverberant tail
+        gain.gain.setValueAtTime(0.001, time);
+        gain.gain.linearRampToValueAtTime(vel * 0.9, time + 0.003);
+        gain.gain.exponentialRampToValueAtTime(0.08, time + 0.011);
+
+        gain.gain.linearRampToValueAtTime(vel * 0.85, time + 0.014);
+        gain.gain.exponentialRampToValueAtTime(0.08, time + 0.023);
+
+        gain.gain.linearRampToValueAtTime(vel * 0.95, time + 0.026);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.26);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(masterFilter);
+
+        noise.start(time);
+        noise.stop(time + 0.27);
+      }
+
+      /* --- Metallic Hi-Hat (Closed & Open) --- */
+      function synthHiHat(time, vel, isOpen) {
+        const duration = isOpen ? 0.34 : 0.055;
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = noiseBuffer;
+
+        const bandpass = audioCtx.createBiquadFilter();
+        bandpass.type = "bandpass";
+        bandpass.frequency.setValueAtTime(9500, time);
+        bandpass.Q.value = 1.2;
+
+        const highpass = audioCtx.createBiquadFilter();
+        highpass.type = "highpass";
+        highpass.frequency.setValueAtTime(6800, time);
+
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(vel * (isOpen ? 0.65 : 0.72), time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        noise.connect(bandpass);
+        bandpass.connect(highpass);
+        highpass.connect(gain);
+        gain.connect(masterFilter);
+
+        noise.start(time);
+        noise.stop(time + duration + 0.01);
+      }
+
+      /* --- Analog Tom Drum --- */
+      function synthTom(time, vel, startFreq, endFreq) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(startFreq, time);
+        osc.frequency.exponentialRampToValueAtTime(endFreq, time + 0.18);
+
+        gain.gain.setValueAtTime(vel * 0.85, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.24);
+
+        osc.connect(gain);
+        gain.connect(masterFilter);
+
+        osc.start(time);
+        osc.stop(time + 0.25);
+      }
+
+      /* --- 808 Dual-Square Metallic Cowbell --- */
+      function synthCowbell(time, vel) {
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const bandpass = audioCtx.createBiquadFilter();
+        const gain = audioCtx.createGain();
+
+        osc1.type = "square";
+        osc2.type = "square";
+        osc1.frequency.setValueAtTime(540, time);
+        osc2.frequency.setValueAtTime(800, time);
+
+        bandpass.type = "bandpass";
+        bandpass.frequency.setValueAtTime(850, time);
+        bandpass.Q.value = 3.2;
+
+        gain.gain.setValueAtTime(vel * 0.55, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
+
+        osc1.connect(bandpass);
+        osc2.connect(bandpass);
+        bandpass.connect(gain);
+        gain.connect(masterFilter);
+
+        osc1.start(time);
+        osc2.start(time);
+        osc1.stop(time + 0.23);
+        osc2.stop(time + 0.23);
+      }
+
+      /* --------------------------------------------------------------------------
+         5. PRECISION WEB AUDIO LOOKAHEAD SCHEDULER
+         -------------------------------------------------------------------------- */
+      const lookaheadMs = 25.0;        // How frequently scheduler runs (ms)
+      const scheduleAheadTime = 0.1;   // How far ahead to schedule audio (sec)
+      let nextNoteTime = 0.0;
+      let timerID = null;
+      const visualQueue = [];          // Syncs audio schedule to requestAnimationFrame
+
+      function nextStep() {
+        const secondsPerBeat = 60.0 / state.bpm;
+        const sixteenthNoteDuration = 0.25 * secondsPerBeat;
+
+        // Calculate swing delay on odd 16th steps (steps 1, 3, 5, 7...)
+        const swingRatio = (state.swing / 100) * 0.65;
+        let stepDuration = sixteenthNoteDuration;
+
+        if (state.currentStep % 2 === 0) {
+          stepDuration = sixteenthNoteDuration * (1 + swingRatio);
+        } else {
+          stepDuration = sixteenthNoteDuration * (1 - swingRatio);
+        }
+
+        nextNoteTime += stepDuration;
+        state.currentStep = (state.currentStep + 1) % NUM_STEPS;
+      }
+
+      function scheduleStep(stepIndex, time) {
+        const activePattern = state.patterns[state.activeSlot];
+
+        // Trigger all active voices on this step
+        TRACKS.forEach(track => {
+          const stepVal = activePattern[track.id][stepIndex];
+          if (stepVal > 0) {
+            triggerDrumVoice(track.id, time, stepVal);
+          }
+        });
+
+        // Push visual playhead event to queue
+        visualQueue.push({ step: stepIndex, time });
+      }
+
+      function scheduler() {
+        while (nextNoteTime < audioCtx.currentTime + scheduleAheadTime) {
+          scheduleStep(state.currentStep, nextNoteTime);
+          nextStep();
+        }
+      }
+
+      function startSequencer() {
+        initAudio();
+        if (state.isPlaying) return;
+
+        state.isPlaying = true;
+        state.currentStep = 0;
+        nextNoteTime = audioCtx.currentTime + 0.03;
+
+        timerID = window.setInterval(scheduler, lookaheadMs);
+        updateTransportUI();
+        setStatus(`PLAYING // PATTERN ${state.activeSlot} @ ${state.bpm} BPM`);
+      }
+
+      function stopSequencer() {
+        if (!state.isPlaying) return;
+
+        state.isPlaying = false;
+        window.clearInterval(timerID);
+        timerID = null;
+        visualQueue.length = 0;
+
+        clearPlayheadUI();
+        updateTransportUI();
+        setStatus("STOPPED // BEREIT");
+      }
+
+      function togglePlayStop() {
+        if (state.isPlaying) {
+          stopSequencer();
+        } else {
+          startSequencer();
+        }
+      }
+
+      /* --------------------------------------------------------------------------
+         6. UI RENDERING & INTERACTION BINDINGS
+         -------------------------------------------------------------------------- */
+      const stepPadElements = {}; // trackId -> Array of 16 button elements
+      const stepNumElements = []; // 16 header number elements
+      const trackRowElements = {};
+
+      function buildSequencerDOM() {
+        const grid = document.getElementById("sequencerGrid");
+        const indicatorsContainer = document.getElementById("stepIndicators");
+
+        // 1. Build 16 Step Header Indicators
+        for (let s = 0; s < NUM_STEPS; s++) {
+          const numEl = document.createElement("div");
+          numEl.className = "step-num" + (s % 4 === 0 ? " beat-start" : "");
+          numEl.textContent = String(s + 1).padStart(2, "0");
+          indicatorsContainer.appendChild(numEl);
+          stepNumElements.push(numEl);
+        }
+
+        // 2. Build 8 Track Rows
+        TRACKS.forEach(track => {
+          const row = document.createElement("div");
+          row.className = "track-row";
+          row.style.setProperty("--track-color", track.color);
+          trackRowElements[track.id] = row;
+
+          // Left Track Controls
+          const controls = document.createElement("div");
+          controls.className = "track-controls";
+
+          // Trigger / Preview Pad
+          const trigBtn = document.createElement("button");
+          trigBtn.className = "trigger-pad";
+          trigBtn.title = `${track.name} vorhören`;
+          trigBtn.innerHTML = `<span class="track-color-bar"></span><span>${track.name}</span>`;
+          trigBtn.addEventListener("pointerdown", (e) => {
+            e.preventDefault();
+            triggerDrumVoice(track.id, audioCtx ? audioCtx.currentTime : 0, 2);
+          });
+
+          // Mute Button
+          const muteBtn = document.createElement("button");
+          muteBtn.className = "mini-btn mute";
+          muteBtn.textContent = "M";
+          muteBtn.title = "Mute Spur";
+          muteBtn.addEventListener("click", () => {
+            state.trackSettings[track.id].muted = !state.trackSettings[track.id].muted;
+            muteBtn.classList.toggle("active", state.trackSettings[track.id].muted);
+            updateMuteSoloVisuals();
+          });
+
+          // Solo Button
+          const soloBtn = document.createElement("button");
+          soloBtn.className = "mini-btn solo";
+          soloBtn.textContent = "S";
+          soloBtn.title = "Solo Spur";
+          soloBtn.addEventListener("click", () => {
+            state.trackSettings[track.id].solo = !state.trackSettings[track.id].solo;
+            soloBtn.classList.toggle("active", state.trackSettings[track.id].solo);
+            updateMuteSoloVisuals();
+          });
+
+          // Per-Track Volume Slider
+          const volSlider = document.createElement("input");
+          volSlider.type = "range";
+          volSlider.className = "track-vol";
+          volSlider.min = "0";
+          volSlider.max = "100";
+          volSlider.value = Math.round(track.defaultVol * 100);
+          volSlider.title = `${track.name} Lautstärke`;
+          volSlider.addEventListener("input", (e) => {
+            state.trackSettings[track.id].volume = Number(e.target.value) / 100;
+          });
+
+          controls.append(trigBtn, muteBtn, soloBtn, volSlider);
+
+          // Right 16 Step Pads
+          const stepsContainer = document.createElement("div");
+          stepsContainer.className = "steps-container";
+          stepPadElements[track.id] = [];
+
+          for (let s = 0; s < NUM_STEPS; s++) {
+            const pad = document.createElement("button");
+            pad.className = "step-pad" + (Math.floor(s / 4) % 2 === 1 ? " group-alt" : "");
+            pad.setAttribute("aria-label", `${track.name} Step ${s + 1}`);
+
+            // Left click cycles: Off (0) -> Normal (1) -> Accent (2) -> Off (0)
+            pad.addEventListener("click", (e) => {
+              initAudio();
+              const pattern = state.patterns[state.activeSlot][track.id];
+              if (e.shiftKey) {
+                pattern[s] = pattern[s] === 2 ? 0 : 2;
+              } else {
+                pattern[s] = (pattern[s] + 1) % 3;
+              }
+              renderPatternGrid();
+              if (pattern[s] > 0 && !state.isPlaying) {
+                triggerDrumVoice(track.id, audioCtx.currentTime, pattern[s]);
+              }
+            });
+
+            // Right click toggles Accent directly
+            pad.addEventListener("contextmenu", (e) => {
+              e.preventDefault();
+              initAudio();
+              const pattern = state.patterns[state.activeSlot][track.id];
+              pattern[s] = pattern[s] === 2 ? 0 : 2;
+              renderPatternGrid();
+              if (pattern[s] > 0 && !state.isPlaying) {
+                triggerDrumVoice(track.id, audioCtx.currentTime, pattern[s]);
+              }
+            });
+
+            stepsContainer.appendChild(pad);
+            stepPadElements[track.id].push(pad);
+          }
+
+          row.append(controls, stepsContainer);
+          grid.appendChild(row);
+        });
+      }
+
+      /**
+       * Syncs step pad active/accent classes with current pattern data
+       */
+      function renderPatternGrid() {
+        const pattern = state.patterns[state.activeSlot];
+        TRACKS.forEach(track => {
+          const pads = stepPadElements[track.id];
+          const steps = pattern[track.id];
+          for (let s = 0; s < NUM_STEPS; s++) {
+            const val = steps[s];
+            pads[s].classList.toggle("active", val === 1 || val === 2);
+            pads[s].classList.toggle("accent", val === 2);
+          }
+        });
+      }
+
+      function updateMuteSoloVisuals() {
+        TRACKS.forEach(track => {
+          const audible = isTrackAudible(track.id);
+          trackRowElements[track.id].classList.toggle("muted", !audible);
+        });
+      }
+
+      /* --------------------------------------------------------------------------
+         7. VISUAL PLAYHEAD ANIMATION LOOP (SYNCED TO AUDIO CLOCK)
+         -------------------------------------------------------------------------- */
+      let lastDrawnStep = -1;
+
+      function clearPlayheadUI() {
+        stepNumElements.forEach(el => el.classList.remove("current"));
+        TRACKS.forEach(t => {
+          stepPadElements[t.id].forEach(pad => pad.classList.remove("playing"));
+        });
+        document.getElementById("stepCounterReadout").textContent = "STEP 01/16";
+        document.getElementById("lcdBeatDot").classList.remove("active");
+        lastDrawnStep = -1;
+      }
+
+      function visualLoop() {
+        if (state.isPlaying && audioCtx) {
+          const currentTime = audioCtx.currentTime;
+          let stepToDraw = lastDrawnStep;
+
+          while (visualQueue.length && visualQueue[0].time <= currentTime) {
+            stepToDraw = visualQueue[0].step;
+            visualQueue.shift();
+          }
+
+          if (stepToDraw !== -1 && stepToDraw !== lastDrawnStep) {
+            // Remove previous step highlight
+            if (lastDrawnStep !== -1) {
+              stepNumElements[lastDrawnStep].classList.remove("current");
+              TRACKS.forEach(t => {
+                stepPadElements[t.id][lastDrawnStep].classList.remove("playing");
+              });
+            }
+
+            // Apply new step highlight
+            stepNumElements[stepToDraw].classList.add("current");
+            TRACKS.forEach(t => {
+              stepPadElements[t.id][stepToDraw].classList.add("playing");
+            });
+
+            document.getElementById("stepCounterReadout").textContent =
+              `STEP ${String(stepToDraw + 1).padStart(2, "0")}/16`;
+
+            // Pulse LCD beat LED on quarter notes (0, 4, 8, 12)
+            const beatDot = document.getElementById("lcdBeatDot");
+            if (stepToDraw % 4 === 0) {
+              beatDot.classList.add("active");
+            } else {
+              beatDot.classList.remove("active");
+            }
+
+            lastDrawnStep = stepToDraw;
+          }
+        }
+        requestAnimationFrame(visualLoop);
+      }
+
+      /* --------------------------------------------------------------------------
+         8. PRESETS, RANDOMIZER & PATTERN MANAGEMENT
+         -------------------------------------------------------------------------- */
+      function loadPreset(presetKey) {
+        const preset = PRESETS[presetKey];
+        if (!preset) return;
+
+        state.patterns[state.activeSlot] = clonePattern(preset.steps);
+        state.bpm = preset.bpm;
+        state.swing = preset.swing;
+
+        // Sync sliders & readouts
+        document.getElementById("bpmSlider").value = state.bpm;
+        document.getElementById("bpmValue").textContent = `${state.bpm} BPM`;
+
+        document.getElementById("swingSlider").value = state.swing;
+        document.getElementById("swingValue").textContent = `${state.swing} %`;
+
+        renderPatternGrid();
+        setStatus(`PRESET GELADEN: ${preset.name.toUpperCase()}`);
+      }
+
+      function generateRandomBeat() {
+        const p = createEmptyPattern();
+        const styles = ["fourOnFloor", "syncopated", "halftime"];
+        const chosenStyle = styles[Math.floor(Math.random() * styles.length)];
+
+        for (let s = 0; s < NUM_STEPS; s++) {
+          // Kick logic
+          if (chosenStyle === "fourOnFloor") {
+            if (s % 4 === 0) p.kick[s] = 2;
+            else if (Math.random() < 0.14) p.kick[s] = 1;
+          } else if (chosenStyle === "halftime") {
+            if (s === 0 || s === 10) p.kick[s] = 2;
+            else if (Math.random() < 0.18) p.kick[s] = 1;
+          } else {
+            if (s === 0 || s === 6 || s === 10) p.kick[s] = 2;
+            else if (Math.random() < 0.16) p.kick[s] = 1;
+          }
+
+          // Snare / Clap backbeat
+          if (chosenStyle === "halftime") {
+            if (s === 8) { p.snare[s] = 2; p.clap[s] = 2; }
+          } else {
+            if (s === 4 || s === 12) {
+              p.snare[s] = 2;
+              if (Math.random() < 0.75) p.clap[s] = 2;
+            } else if (Math.random() < 0.08) {
+              p.snare[s] = 1;
+            }
+          }
+
+          // Hi-Hats
+          if (s % 2 === 0 && Math.random() < 0.85) {
+            p.ch[s] = s % 4 === 2 ? 2 : 1;
+          } else if (Math.random() < 0.35) {
+            p.ch[s] = 1;
+          }
+
+          // Open Hat on offbeats
+          if (s % 4 === 2 && p.ch[s] === 0 && Math.random() < 0.65) {
+            p.oh[s] = 2;
+          }
+
+          // Percussion fills
+          if (Math.random() < 0.14) p.lowtom[s] = Math.random() < 0.3 ? 2 : 1;
+          if (Math.random() < 0.12) p.hitom[s] = 1;
+          if (Math.random() < 0.12) p.cowbell[s] = Math.random() < 0.4 ? 2 : 1;
+        }
+
+        state.patterns[state.activeSlot] = p;
+        renderPatternGrid();
+        setStatus(`RANDOM BEAT GENERIERT (${chosenStyle.toUpperCase()})`);
+      }
+
+      function switchSlot(slotName) {
+        state.activeSlot = slotName;
+        document.getElementById("slotABtn").classList.toggle("active", slotName === "A");
+        document.getElementById("slotBBtn").classList.toggle("active", slotName === "B");
+        renderPatternGrid();
+        setStatus(`AKTIVER SLOT: PATTERN ${slotName}`);
+      }
+
+      function setStatus(message) {
+        document.getElementById("lcdText").textContent = message;
+      }
+
+      function updateTransportUI() {
+        const playBtn = document.getElementById("playStopBtn");
+        const playLabel = document.getElementById("playStopLabel");
+        playBtn.classList.toggle("playing", state.isPlaying);
+        playLabel.textContent = state.isPlaying ? "STOP" : "PLAY";
+      }
+
+      /* --------------------------------------------------------------------------
+         9. EVENT LISTENERS & INITIALIZATION
+         -------------------------------------------------------------------------- */
+      function bindUIEvents() {
+        // Transport
+        document.getElementById("playStopBtn").addEventListener("click", togglePlayStop);
+
+        // Slots A / B
+        document.getElementById("slotABtn").addEventListener("click", () => switchSlot("A"));
+        document.getElementById("slotBBtn").addEventListener("click", () => switchSlot("B"));
+
+        // Clear Pattern
+        document.getElementById("clearBtn").addEventListener("click", () => {
+          state.patterns[state.activeSlot] = createEmptyPattern();
+          renderPatternGrid();
+          setStatus(`PATTERN ${state.activeSlot} GELÖSCHT`);
+        });
+
+        // BPM Slider
+        const bpmSlider = document.getElementById("bpmSlider");
+        const bpmValue = document.getElementById("bpmValue");
+        bpmSlider.addEventListener("input", (e) => {
+          state.bpm = Number(e.target.value);
+          bpmValue.textContent = `${state.bpm} BPM`;
+        });
+
+        // Swing Slider
+        const swingSlider = document.getElementById("swingSlider");
+        const swingValue = document.getElementById("swingValue");
+        swingSlider.addEventListener("input", (e) => {
+          state.swing = Number(e.target.value);
+          swingValue.textContent = `${state.swing} %`;
+        });
+
+        // Master Filter Cutoff
+        const filterSlider = document.getElementById("filterSlider");
+        const filterValue = document.getElementById("filterValue");
+        filterSlider.addEventListener("input", (e) => {
+          const val = Number(e.target.value);
+          state.masterCutoff = val;
+          filterValue.textContent = val >= 1000 ? `${(val / 1000).toFixed(1)}k` : `${val}Hz`;
+          if (masterFilter && audioCtx) {
+            masterFilter.frequency.setTargetAtTime(val, audioCtx.currentTime, 0.015);
+          }
+        });
+
+        // Master Drive
+        document.getElementById("driveSlider").addEventListener("input", (e) => {
+          state.masterDrive = Number(e.target.value);
+          if (masterShaper) {
+            masterShaper.curve = makeDistortionCurve(state.masterDrive);
+          }
+          setStatus(`ANALOG DRIVE: ${state.masterDrive} %`);
+        });
+
+        // Master Volume
+        const masterVolSlider = document.getElementById("masterVolSlider");
+        const masterVolValue = document.getElementById("masterVolValue");
+        masterVolSlider.addEventListener("input", (e) => {
+          const val = Number(e.target.value);
+          state.masterVolume = val / 100;
+          masterVolValue.textContent = `${val} %`;
+          if (masterGain && audioCtx) {
+            masterGain.gain.setTargetAtTime(state.masterVolume, audioCtx.currentTime, 0.015);
+          }
+        });
+
+        // Presets & Randomizer
+        document.getElementById("presetSelect").addEventListener("change", (e) => {
+          loadPreset(e.target.value);
+        });
+
+        document.getElementById("randomBtn").addEventListener("click", generateRandomBeat);
+
+        // JSON Export / Import Drawer
+        const jsonDrawer = document.getElementById("jsonDrawer");
+        const jsonTextarea = document.getElementById("jsonTextarea");
+
+        document.getElementById("toggleJsonBtn").addEventListener("click", () => {
+          const isOpen = jsonDrawer.classList.toggle("open");
+          if (isOpen) {
+            const payload = {
+              bpm: state.bpm,
+              swing: state.swing,
+              steps: state.patterns[state.activeSlot]
+            };
+            jsonTextarea.value = JSON.stringify(payload);
+          }
+        });
+
+        document.getElementById("copyJsonBtn").addEventListener("click", () => {
+          const payload = {
+            bpm: state.bpm,
+            swing: state.swing,
+            steps: state.patterns[state.activeSlot]
+          };
+          jsonTextarea.value = JSON.stringify(payload);
+          jsonTextarea.select();
+          document.execCommand("copy");
+          setStatus("PATTERN JSON IN ZWISCHENABLAGE KOPIERT");
+        });
+
+        document.getElementById("loadJsonBtn").addEventListener("click", () => {
+          try {
+            const parsed = JSON.parse(jsonTextarea.value);
+            if (!parsed || !parsed.steps) throw new Error("Ungültiges Format");
+            state.patterns[state.activeSlot] = clonePattern(parsed.steps);
+            if (typeof parsed.bpm === "number") {
+              state.bpm = Math.min(180, Math.max(60, parsed.bpm));
+              bpmSlider.value = state.bpm;
+              bpmValue.textContent = `${state.bpm} BPM`;
+            }
+            if (typeof parsed.swing === "number") {
+              state.swing = Math.min(50, Math.max(0, parsed.swing));
+              swingSlider.value = state.swing;
+              swingValue.textContent = `${state.swing} %`;
+            }
+            renderPatternGrid();
+            setStatus("PATTERN JSON ERFOLGREICH GELADEN");
+          } catch (err) {
+            setStatus("FEHLER: UNGÜLTIGES JSON FORMAT");
+          }
+        });
+
+        // Keyboard Shortcuts (Space = Play/Stop, C = Clear)
+        window.addEventListener("keydown", (e) => {
+          if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
+
+          if (e.code === "Space") {
+            e.preventDefault();
+            togglePlayStop();
+          } else if (e.key.toLowerCase() === "c") {
+            state.patterns[state.activeSlot] = createEmptyPattern();
+            renderPatternGrid();
+            setStatus(`PATTERN ${state.activeSlot} GELÖSCHT`);
+          }
+        });
+      }
+
+      // Bootstrap Application
+      buildSequencerDOM();
+      bindUIEvents();
+      renderPatternGrid();
+      requestAnimationFrame(visualLoop);
+    })();
+  </script>
+</body>
+</html>
